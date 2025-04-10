@@ -23,12 +23,13 @@ type Command struct {
 	Name        string
 	Description string
 	Args        Args
+	Completions func(d prompt.Document) []prompt.Suggest
 	Exec        func(input []string, this Command) error
 }
 
 type Handler struct {
-	prompt               string
-	commands             []Command
+	promptTxt            string
+	commands             map[string]Command
 	completion           []prompt.Suggest
 	AllowPartialCommands bool
 }

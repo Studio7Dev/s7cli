@@ -11,43 +11,72 @@ import (
 )
 
 func NewHandler(prompt string, commands ...Command) Handler {
-	return Handler{prompt: prompt, commands: commands}
+	cmds := make(map[string]Command)
+	for _, c := range commands {
+		cmds[c.Name] = c
+	}
+	return Handler{promptTxt: prompt, commands: cmds}
 }
 
 func (this Handler) completer(d prompt.Document) []prompt.Suggest {
+	compText := d.TextBeforeCursor()
+	words := strings.Fields(compText)
+	var out []prompt.Suggest
+
+	if len(words) <= 1 {
+		out = prompt.FilterHasPrefix(this.completion, d.GetWordBeforeCursor(), true)
+		if len(out) == 1 {
+
+		}
+	} else {
+		out = prompt.FilterHasPrefix(this.commands[words[0]].Completions(d), d.GetWordBeforeCursor(), true)
+	}
+	// Detect if the user presses the spacebar and a suggestion is available
+	if d.GetWordBeforeCursor() == "" && len(out) > 0 && d.TextBeforeCursor() != "" && compText[len(compText)-1] == ' ' {
+		// Automatically complete with the first suggestion
+		out = []prompt.Suggest{out[0]}
+	}
+
 	return prompt.FilterHasPrefix(this.completion, d.GetWordBeforeCursor(), true)
 }
 
 func (this Handler) GetInput() string {
-	return prompt.Input(this.prompt, this.completer)
+	return prompt.Input(this.promptTxt, this.completer)
 }
 
 func (this Handler) Handle(input string) {
-	args := strings.Split(input, " ")
+	args := strings.Fields(input)
 	notfound := true
 	matches := []Command{}
 
-	for _, c := range this.commands {
-		if this.AllowPartialCommands {
-			if strings.HasPrefix(c.Name, args[0]) {
-				//adds command arguments to the completion list, but is virtually pointless
-				/* (likely added by copilot)
-				//this.completion = append(this.completion, prompt.Suggest{
-				//	Text: strings.Join(args, " "),
-				})*/
-				notfound = false
-				matches = append(matches, c)
-			}
+	if args[0] == "" {
+		return
+	}
 
-			if len(matches) > 1 {
-				fmt.Println(Red + "Found multiple matches for '" + args[0] + ":" + White)
-				for _, c := range matches {
-					fmt.Println("  " + c.Name)
-				}
-				break
-			}
-			continue
-		}
+	for _, c := range this.commands {
+		// Handling partial commands (similar to Cisco IOS)
+		// -> disabled to avoid conflicting with autocompleter
+		//
+		//if this.AllowPartialCommands {
+		//	if strings.HasPrefix(c.Name, args[0]) {
+		//		//adds command arguments to the completion list, but is virtually pointless
+		//		/* (likely added by copilot)
+		//		//this.completion = append(this.completion, promptTxt.Suggest{
+		//		//	Text: strings.Join(args, " "),
+		//		})*/
+		//		notfound = false
+		//		matches = append(matches, c)
+		//	}
+		//
+		//	if len(matches) > 1 {
+		//		fmt.Println(Red + "Found multiple matches for '" + args[0] + ":" + White)
+		//		for _, c := range matches {
+		//			fmt.Println("  " + c.Name)
+		//		}
+		//		break
+		//	}
+		//	continue
+		//}
 
 		if args[0] == c.Name {
 			matches = append(matches, c)
@@ -65,7 +94,7 @@ func (this Handler) Handle(input string) {
 }
 
 func (this *Handler) SetPrompt(prompt string) {
-	this.prompt = prompt
+	this.promptTxt = prompt
 }
 
 func (this *Handler) AddCommand(command Command) {
@@ -79,7 +108,7 @@ func (this *Handler) AddCommand(command Command) {
 			os.Exit(1)
 		}
 	}
-	this.commands = append(this.commands, command)
+	this.commands[command.Name] = command
 	this.completion = append(this.completion, prompt.Suggest{
 		Text:        command.Name,
 		Description: command.Description,
