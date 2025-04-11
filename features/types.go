@@ -2,6 +2,7 @@ package features
 
 import (
 	"errors"
+	. "mk3cli/s7cli/colors"
 	. "mk3cli/s7cli/commands"
 )
 
@@ -38,7 +39,7 @@ func (this Feature) DisplayUsage() {
 		if a.Required {
 			usage += "--" + a.Name.Format(false) + " [" + a.Datatype + "] "
 		} else {
-			usage += "--" + DarkGray + a.Name.Format(true) + " [" + Cyan + a.Datatype + DarkGray + "] "
+			usage += "--" + Gray + a.Name.Format(true) + " [" + Cyan + a.Datatype + Gray + "] "
 		}
 	}
 	println(usage)

@@ -8,47 +8,64 @@ import (
 	"strings"
 
 	"github.com/c-bata/go-prompt"
+	. "mk3cli/s7cli/colors"
 )
 
-func NewHandler(prompt string, commands ...Command) Handler {
-	return Handler{prompt: prompt, commands: commands}
+func NewHandler(prompt string, commands ...Command) CMDHandler {
+	return CMDHandler{prompt: prompt, commands: commands}
 }
 
-func (this Handler) completer(d prompt.Document) []prompt.Suggest {
-	return prompt.FilterHasPrefix(this.completion, d.GetWordBeforeCursor(), true)
+func (this CMDHandler) completer(d prompt.Document) []prompt.Suggest {
+	return prompt.FilterHasPrefix(this.completions, d.GetWordBeforeCursor(), true)
 }
 
-func (this Handler) GetInput() string {
-	return prompt.Input(this.prompt, this.completer)
+func (this CMDHandler) GetInput() string {
+	return prompt.Input(
+		this.prompt,
+		this.completer,
+		prompt.OptionAddASCIICodeBind(prompt.ASCIICodeBind{
+			ASCIICode: []byte{0x3F},
+			Fn: func(buffer *prompt.Buffer) {
+				fmt.Println(buffer.Text() + "?\n\u001B[2K")
+				for _, c := range this.completions {
+					fmt.Println("\033[2K\r  " + c.Text + " " + SRender(c.Description, CWhite, None, Dim))
+				}
+				fmt.Println("\033[2K\r")
+			},
+		}),
+		prompt.OptionAddASCIICodeBind(prompt.ASCIICodeBind{
+			ASCIICode: []byte{0x20},
+			Fn: func(buffer *prompt.Buffer) {
+				completions := prompt.FilterHasPrefix(this.completions, buffer.Text(), true)
+				if len(completions) > 0 {
+					buffer.InsertText(strings.Replace(completions[0].Text, buffer.Text(), "", 1), false, true)
+				}
+				buffer.InsertText(" ", false, true)
+
+				this.completions = nil
+
+				for _, c := range this.commands {
+					if c.Name == completions[0].Text {
+						this.completions = c.SubCompletion
+					}
+				}
+			},
+		}),
+		prompt.OptionAddKeyBind(prompt.KeyBind{
+			Key: prompt.ControlC,
+			Fn: func(buffer *prompt.Buffer) {
+				fmt.Println(SRender("Goodbye 👋", CGreen, None, Bold))
+				os.Exit(0)
+			},
+		}))
 }
 
-func (this Handler) Handle(input string) {
+func (this CMDHandler) Handle(input string) {
 	args := strings.Split(input, " ")
 	notfound := true
 	matches := []Command{}
 
 	for _, c := range this.commands {
-		if this.AllowPartialCommands {
-			if strings.HasPrefix(c.Name, args[0]) {
-				//adds command arguments to the completion list, but is virtually pointless
-				/* (likely added by copilot)
-				//this.completion = append(this.completion, prompt.Suggest{
-				//	Text: strings.Join(args, " "),
-				})*/
-				notfound = false
-				matches = append(matches, c)
-			}
-
-			if len(matches) > 1 {
-				fmt.Println(Red + "Found multiple matches for '" + args[0] + ":" + White)
-				for _, c := range matches {
-					fmt.Println("  " + c.Name)
-				}
-				break
-			}
-			continue
-		}
-
 		if args[0] == c.Name {
 			matches = append(matches, c)
 			notfound = false
@@ -60,15 +77,15 @@ func (this Handler) Handle(input string) {
 	}
 
 	if notfound {
-		fmt.Println(Red + "Command not found: '" + args[0] + "'" + White)
+		fmt.Println(SRender("Command not found: '"+args[0]+"'", CRed, None))
 	}
 }
 
-func (this *Handler) SetPrompt(prompt string) {
+func (this *CMDHandler) SetPrompt(prompt string) {
 	this.prompt = prompt
 }
 
-func (this *Handler) AddCommand(command Command) {
+func (this *CMDHandler) AddCommand(command Command) {
 	// check to verify required args come before any non-required
 	in_required := true
 	for _, arg := range command.Args {
@@ -80,14 +97,14 @@ func (this *Handler) AddCommand(command Command) {
 		}
 	}
 	this.commands = append(this.commands, command)
-	this.completion = append(this.completion, prompt.Suggest{
+	this.completions = append(this.completions, prompt.Suggest{
 		Text:        command.Name,
 		Description: command.Description,
 	})
 }
 
 // initalizes the CLI with 3 default commands (help, clear, exit)
-func (this *Handler) Init() Handler {
+func (this *CMDHandler) Init() CMDHandler {
 	// Add the default commands
 
 	// Exit command
@@ -96,6 +113,7 @@ func (this *Handler) Init() Handler {
 		Description: "Exits this application.",
 		Args:        []Arg{},
 		Exec: func(args []string, command Command) error {
+			fmt.Println(SRender("Goodbye 👋", CGreen, None, Bold))
 			os.Exit(0)
 			return nil
 		},
