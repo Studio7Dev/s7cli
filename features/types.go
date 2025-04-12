@@ -37,9 +37,9 @@ func (this Feature) DisplayUsage() {
 
 	for _, a := range this.Args {
 		if a.Required {
-			usage += "--" + a.Name.Format(false) + " [" + a.Datatype + "] "
+			usage += "--" + a.Name + " [" + a.Datatype + "] "
 		} else {
-			usage += "--" + Gray + a.Name.Format(true) + " [" + Cyan + a.Datatype + Gray + "] "
+			usage += "--" + Gray + a.Name + " [" + Cyan + a.Datatype + Gray + "] "
 		}
 	}
 	println(usage)
@@ -47,7 +47,7 @@ func (this Feature) DisplayUsage() {
 
 func (this FeatureSetArgsList) Find(name string) (FeatureSetArg, error) {
 	for _, f_arg := range this {
-		if f_arg.Arg.Name.Full == name {
+		if f_arg.Arg.Name == name {
 			return f_arg, nil
 		}
 	}

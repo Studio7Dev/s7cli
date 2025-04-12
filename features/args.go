@@ -18,11 +18,11 @@ func DisplayEnabledArgs(args []Arg, enabled []FeatureSetArg) string {
 		}
 
 		if a.Required {
-			output += "<" + a.Name.Full + "=" + fmt.Sprintf("\""+SRender("%v", CGreen, None)+"\"", enabledVal) + " (" + SRender(a.Datatype, CWhite, None, Dim) + ")> "
+			output += "<" + a.Name + "=" + fmt.Sprintf("\""+SRender("%v", CGreen, None)+"\"", enabledVal) + " (" + SRender(a.Datatype, CWhite, None, Dim) + ")> "
 		} else if !a.Required && x < len(enabled) {
-			output += "[" + a.Name.Full + "=" + fmt.Sprintf("\""+SRender("%v", CGreen, None)+"\"", enabledVal) + " (" + SRender(a.Datatype, CWhite, None, Dim) + ")] "
+			output += "[" + a.Name + "=" + fmt.Sprintf("\""+SRender("%v", CGreen, None)+"\"", enabledVal) + " (" + SRender(a.Datatype, CWhite, None, Dim) + ")] "
 		} else {
-			output += "[" + a.Name.Full + " (" + SRender(a.Datatype, CWhite, None, Dim) + ")] "
+			output += "[" + a.Name + " (" + SRender(a.Datatype, CWhite, None, Dim) + ")] "
 		}
 		x++
 	}

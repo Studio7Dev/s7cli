@@ -15,42 +15,62 @@ func NewHandler(prompt string, commands ...Command) CMDHandler {
 	return CMDHandler{prompt: prompt, commands: commands}
 }
 
-func (this CMDHandler) completer(d prompt.Document) []prompt.Suggest {
-	return prompt.FilterHasPrefix(this.completions, d.GetWordBeforeCursor(), true)
-}
-
-func (this CMDHandler) GetInput() string {
+func (this *CMDHandler) GetInput() string {
 	return prompt.Input(
+		// Prompt text
 		this.prompt,
-		this.completer,
+
+		// Completion engine
+		func(d prompt.Document) []prompt.Suggest {
+			if d.GetCharRelativeToCursor(0) == ' ' {
+				this.updateCompletions(d)
+				// TODO:
+				// - cache the current word position to determine if we need to update the completion cache
+			}
+
+			return prompt.FilterHasPrefix(this.completions, d.GetWordBeforeCursor(), true)
+		},
+
+		// Completion styling options
+		prompt.OptionSuggestionBGColor(prompt.DarkGray),
+		prompt.OptionSuggestionTextColor(prompt.Black),
+		prompt.OptionDescriptionBGColor(prompt.LightGray),
+		prompt.OptionDescriptionTextColor(prompt.Black),
+
+		prompt.OptionSelectedSuggestionBGColor(prompt.DarkGreen),
+		prompt.OptionSelectedSuggestionTextColor(prompt.White),
+		prompt.OptionSelectedDescriptionBGColor(prompt.Green),
+		prompt.OptionSelectedDescriptionTextColor(prompt.White),
+
+		// Add bind to ? key to show completions
 		prompt.OptionAddASCIICodeBind(prompt.ASCIICodeBind{
 			ASCIICode: []byte{0x3F},
 			Fn: func(buffer *prompt.Buffer) {
-				fmt.Println(buffer.Text() + "?\n\u001B[2K")
-				for _, c := range this.completions {
+				d := buffer.Document()
+				compMatches := prompt.FilterHasPrefix(this.completions, d.GetWordBeforeCursor(), true)
+
+				if len(compMatches) == 1 {
+					this.forceBestCompletion(compMatches, buffer)
+					return
+				}
+
+				fmt.Println("?\n\u001B[2K")
+				for _, c := range compMatches {
 					fmt.Println("\033[2K\r  " + c.Text + " " + SRender(c.Description, CWhite, None, Dim))
 				}
 				fmt.Println("\033[2K\r")
 			},
 		}),
+		// Add bind to space key to auto complete the first suggestion
 		prompt.OptionAddASCIICodeBind(prompt.ASCIICodeBind{
 			ASCIICode: []byte{0x20},
 			Fn: func(buffer *prompt.Buffer) {
-				completions := prompt.FilterHasPrefix(this.completions, buffer.Text(), true)
-				if len(completions) > 0 {
-					buffer.InsertText(strings.Replace(completions[0].Text, buffer.Text(), "", 1), false, true)
-				}
-				buffer.InsertText(" ", false, true)
-
-				this.completions = nil
-
-				for _, c := range this.commands {
-					if c.Name == completions[0].Text {
-						this.completions = c.SubCompletion
-					}
-				}
+				this.forceBestCompletion(prompt.FilterHasPrefix(this.completions, buffer.Document().GetWordBeforeCursor(), true), buffer)
+				buffer.InsertText(" ", false, true) // maintain normal space key behavior
+				this.updateCompletions(*buffer.Document())
 			},
 		}),
+		// Add bind to Ctrl+C to exit the program normally
 		prompt.OptionAddKeyBind(prompt.KeyBind{
 			Key: prompt.ControlC,
 			Fn: func(buffer *prompt.Buffer) {
@@ -73,7 +93,7 @@ func (this CMDHandler) Handle(input string) {
 	}
 
 	if len(matches) == 1 {
-		matches[0].Exec(args, matches[0])
+		matches[0].Exec(args, &matches[0])
 	}
 
 	if notfound {
@@ -92,7 +112,7 @@ func (this *CMDHandler) AddCommand(command Command) {
 		if !arg.Required && in_required {
 			in_required = false
 		} else if arg.Required && !in_required {
-			panic("Command \"" + command.Name + "\" has required argument after non-required arguments!\n\tArgument: " + arg.Name.Full)
+			panic("Command \"" + command.Name + "\" has required argument after non-required arguments!\n\tArgument: " + arg.Name)
 			os.Exit(1)
 		}
 	}
@@ -109,10 +129,11 @@ func (this *CMDHandler) Init() CMDHandler {
 
 	// Exit command
 	this.AddCommand(Command{
-		Name:        "exit",
-		Description: "Exits this application.",
-		Args:        []Arg{},
-		Exec: func(args []string, command Command) error {
+		Name:          "exit",
+		Description:   "Exits this application.",
+		Args:          []Arg{},
+		SubCompletion: nil,
+		Exec: func(args []string, command *Command) error {
 			fmt.Println(SRender("Goodbye 👋", CGreen, None, Bold))
 			os.Exit(0)
 			return nil
@@ -121,10 +142,11 @@ func (this *CMDHandler) Init() CMDHandler {
 
 	// Help command
 	this.AddCommand(Command{
-		Name:        "help",
-		Description: "Displays the list of ",
-		Args:        []Arg{},
-		Exec: func(args []string, command Command) error {
+		Name:          "help",
+		Description:   "Displays the current list of commands",
+		Args:          []Arg{},
+		SubCompletion: nil,
+		Exec: func(args []string, command *Command) error {
 			if len(args) > 1 {
 				for _, c := range this.commands {
 					if args[0] == c.Name {
@@ -144,10 +166,11 @@ func (this *CMDHandler) Init() CMDHandler {
 
 	// Clear command
 	this.AddCommand(Command{
-		Name:        "clear",
-		Description: "Clears the console.",
-		Args:        []Arg{},
-		Exec: func(input []string, this Command) error {
+		Name:          "clear",
+		Description:   "Clears the console.",
+		Args:          []Arg{},
+		SubCompletion: nil,
+		Exec: func(input []string, this *Command) error {
 			os_switch := make(map[string]func()) //Initialize it
 			os_switch["linux"] = func() {
 				cmd := exec.Command("clear") //Linux example, its tested

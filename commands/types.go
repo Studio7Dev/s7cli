@@ -6,17 +6,12 @@ import (
 )
 
 type Arg struct {
-	Name     Name
+	Name     string
 	Datatype string
 	Required bool
 }
 
 type Args []Arg
-
-type Name struct {
-	Full  string
-	Short string
-}
 
 // Command struct
 
@@ -24,15 +19,16 @@ type Command struct {
 	Name          string
 	Description   string
 	Args          Args
-	SubCompletion []prompt.Suggest
-	Exec          func(input []string, this Command) error
+	SubCompletion func(input string) []prompt.Suggest
+	Exec          func(input []string, this *Command) error
 }
 
 type CMDHandler struct {
-	prompt      string
-	buffer      []byte
-	commands    []Command
-	completions []prompt.Suggest
+	prompt        string
+	buffer        []byte
+	commands      []Command
+	completions   []prompt.Suggest
+	prevWordIndex int
 }
 
 // Displays the valid usage of a command to the terminal
@@ -41,9 +37,9 @@ func (this Command) DisplayUsage() {
 
 	for _, a := range this.Args {
 		if a.Required {
-			usage += "--" + a.Name.Format(false) + " [" + Cyan + a.Datatype + White + "] " + Reset
+			usage += "--" + a.Name + " [" + Cyan + a.Datatype + White + "] " + Reset
 		} else {
-			usage += Gray + "--" + a.Name.Format(true) + " [" + Cyan + a.Datatype + Gray + "] " + Reset
+			usage += Gray + "--" + a.Name + " [" + Cyan + a.Datatype + Gray + "] " + Reset
 		}
 	}
 	println(usage)
